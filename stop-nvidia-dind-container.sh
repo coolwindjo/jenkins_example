@@ -1,4 +1,6 @@
-docker stop jenkins-docker
+docker stop nvidia-dind-container
+
+docker rmi nvidia-dind-image
 
 docker network rm jenkins
 

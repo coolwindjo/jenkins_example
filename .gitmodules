@@ -1,0 +1,3 @@
+[submodule "nvidia-dind"]
+	path = nvidia-dind
+	url = https://github.com/ehfd/nvidia-dind.git
