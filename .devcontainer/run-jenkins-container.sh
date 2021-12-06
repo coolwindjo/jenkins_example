@@ -1,9 +1,9 @@
-JENKINS_DATA=~/workspace/jenkins_home/data
+JENKINS_DATA=${PWD}/../../../workspace/jenkins_home/data
 
 sudo chown -R 1000.1000 ${JENKINS_DATA}
+sudo chmod 777 ${JENKINS_DATA}/..
 
-docker build -t jenkins-image .
-
+docker build -t jenkins-image . && \
 docker run \
 	--name jenkins-container \
 	--rm \
@@ -15,10 +15,14 @@ docker run \
 	--publish 8080:8080 \
 	--publish 50000:50000 \
 	--volume ${JENKINS_DATA}:/var/jenkins_home \
+	--volume ${JENKINS_DATA}/..:/var/jenkins_out \
 	--volume jenkins-docker-certs:/certs/client \
+	--volume /mnt/motional_database:/mnt/motional_database \
 	--workdir=/var/jenkins_home \
-	jenkins-image \
-	# /bin/bash 
+	jenkins-image
+	#jenkins-image \
+	#/bin/bash 
+	# --publish 8080:8080 \
 	# -it \
 	# --net=host \
 	# --privileged \
