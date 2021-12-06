@@ -1,0 +1,6 @@
+role-strategy:latest
+blueocean:1.25.1
+docker-workflow:1.26
+extended-choice-parameter
+pipeline-model-definition
+docker-plugin:0.16.1
