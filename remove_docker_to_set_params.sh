@@ -1,1 +1,0 @@
-docker rmi python3-docker
