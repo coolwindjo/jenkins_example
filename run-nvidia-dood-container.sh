@@ -1,19 +1,24 @@
 JENKINS_DATA=/var/jenkins_home
+#DOCKER_GID=$(awk -F\: '/docker/ {print $3}' /etc/group)
+#echo ${DOCKER_GID}
 
 cd jenkins-nvidia-dood
 
 sudo mkdir -p ${JENKINS_DATA}
 sudo mkdir -p ${JENKINS_DATA}/out
+sudo cp .gitconfig ${JENKINS_DATA}
+sudo tar -xzvf ssh_mun.tar.gz -C ${JENKINS_DATA}/
 sudo chown -R 1000.1000 ${JENKINS_DATA}
 
 # docker network create jenkins
 
-docker build -t jenkins-dood-image . && \
+docker build \
+	--build-arg dockerGid=$(awk -F\: '/docker/ {print $3}' /etc/group) \
+	-t jenkins-dood-image . && \
 	#--restart=always \
-	#-it \
 docker run \
-	--name jenkins-dood-container \
 	--rm \
+	--name jenkins-dood-container \
 	--detach \
 	--publish 8080:8080 \
 	--publish 50000:50000 \
@@ -21,11 +26,13 @@ docker run \
 	--volume /var/run/docker.sock:/var/run/docker.sock \
 	--volume ${JENKINS_DATA}:/var/jenkins_home \
 	--volume ${JENKINS_DATA}/out:/var/jenkins_home/out \
-	--volume /mnt/motional_database:/mnt/motional_database \
+	--volume /mnt/Vision_AI_NAS:/mnt/Vision_AI_NAS \
+	--volume /mnt/Motional_Database:/mnt/Motional_Database \
 	--workdir=/var/jenkins_home \
 	jenkins-dood-image
-#	jenkins-dood-image \
-#	/bin/bash
+	# -it \
+	# jenkins-dood-image \
+	# /bin/bash
 	# -e "TZ=America/Chicago"
 	# --volume ${JENKINS_DATA}:/var/jenkins_home \	# --volume $HOME/jenkins:/var/jenkins_home would map the container’s /var/jenkins_home directory to the jenkins subdirectory within the $HOME directory on your local machine, which would typically be /Users/<your-username>/jenkins or /home/<your-username>/jenkins. Note that if you change the source volume or directory for this, the volume from the docker:dind container above needs to be updated to match this.
 	# --privileged \

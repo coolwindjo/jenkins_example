@@ -120,17 +120,17 @@ RUN apt-get update && apt-get install -q -y --no-install-recommends \
 # getent group docker | awk -F: '{printf "%d\n", $3}'
 #RUN dockerGid=$(getent group docker | awk -F: '{printf "%d\n", $3}')
 #RUN dockerGid=$(awk -F\: '/docker/ {print $3}' /etc/group)
-#ARG dockerGid=999
-ARG dockerGid=1013
-RUN echo "${dockerGid}"
+ARG dockerGid=999
+# ARG dockerGid=1013
+RUN echo ${dockerGid}
 RUN echo "docker:x:${dockerGid}:jenkins" >> /etc/group
 
 # drop back to the regular jenkins user - good practice
 USER jenkins
 
 COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
-RUN jenkins-plugin-cli --plugins < /usr/share/jenkins/ref/plugins.txt
-# RUN /usr/local/bin/install-plugins.sh < /usr/share/jenkins/ref/plugins.txt
+# RUN jenkins-plugin-cli --plugins < /usr/share/jenkins/ref/plugins.txt
+RUN /usr/local/bin/install-plugins.sh < /usr/share/jenkins/ref/plugins.txt
 # Install Jenkins plugins
 	# "blueocean:1.25.1" \
 	# "docker-workflow:1.26" \
