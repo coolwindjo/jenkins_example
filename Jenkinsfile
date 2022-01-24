@@ -43,7 +43,7 @@ pipeline {
       steps {
         echo 'Starting Model Engineering...'
         sh '''cd e2e-ml/deploy/
-./onnx_to_bin.py --model /mnt/motional_database/'''+model_for_quantization+' --dataset /mnt/motional_database/'+dataset_for_quantization
+./onnx_to_bin.py --model /mnt/Motional_Database/'''+model_for_quantization+' --dataset /mnt/Motional_Database/'+dataset_for_quantization
       }
     }
 
@@ -63,9 +63,10 @@ pipeline {
       steps {
         echo 'Start Postprocessing...'
         sh 'ls -al /var/jenkins_home/out/'
+        sh 'mkdir /var/jenkins_home/out/'+dateTime
         sh 'ls -al e2e-ml/deploy/ambarella/out/cavalry_out/'
-        sh '''mv e2e-ml/deploy/ambarella/out/cavalry_out/lgenet_cavalry.bin /var/jenkins_home/out
-rm -rf e2e-ml'''
+        sh 'mv e2e-ml/deploy/ambarella/out/cavalry_out/lgenet_cavalry.bin /var/jenkins_home/out/'+dateTime
+        sh 'rm -rf e2e-ml'
       }
     }
 
