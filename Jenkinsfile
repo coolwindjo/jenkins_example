@@ -40,6 +40,68 @@ def applyCommit(String commitCommand, int isBase) {
     }
 }
 
+
+def getDevice(String containerName){
+  println('getGPUDevice containerName is ' + containerName)
+  script_str = "echo \$(docker inspect --format='{{(.HostConfig.DeviceRequests)}}' "+containerName+" | wc -w)"
+  device_str_count = sh(returnStdout: true, script: script_str).trim().toInteger()
+  // print('device str count is ' + device_str_count)
+
+  def use_gpu = []
+  if (device_str_count > 1){
+    script_str = "echo \$(docker inspect --format='{{(index .HostConfig.DeviceRequests 0).DeviceIDs}}' "+containerName+" | cut -c 2)"
+    start_gpu_number = sh(returnStdout: true, script: script_str).trim().toInteger()
+    script_str = "echo \$(docker inspect --format='{{(index .HostConfig.DeviceRequests 0).DeviceIDs}}' "+containerName+" | rev | cut -c 2)"
+    end_gpu_number = sh(returnStdout: true, script: script_str).trim().toInteger()
+    // println('start_gpu_number is ' + start_gpu_number)
+    // println('end_gpu_number is ' + end_gpu_number)
+
+    for (gpu_number in start_gpu_number .. end_gpu_number){
+      use_gpu.add(gpu_number)
+    }
+  }else{
+    println('this container not use gpu, container name is ' + containerName)
+  }
+
+  return use_gpu
+}
+
+def getContainerName(int containerNumber){
+  container_name = sh(returnStdout: true, script: "echo \$(docker container ls -q | sed -n "+containerNumber+"p)").trim()
+  // println(container_name)
+  return container_name
+}
+
+def getUsableGPU(){
+  gpu_list = [0,1,2,3] //T640
+  str_container_count = sh(returnStdout: true, script: "echo \$(docker container ls -q | wc -l)")
+  container_count = str_container_count.toInteger()
+  println('container count is ' + container_count)
+  while (container_count > 0){
+    container_name = getContainerName(container_count)
+    device_list = getDevice(container_name)
+    println(device_list)
+    device_list.each{
+      // print('remove device is ' + it)
+      for (i in 0 .. gpu_list.size()){
+        gpu_device = gpu_list.get(i)
+        if (gpu_device == it){
+          // print('remove matched gpu device is ' + gpu_device)
+          gpu_list.remove(i)
+          break
+        }
+      }
+    }
+    container_count--
+  }
+
+  println('usable gpu is ' + gpu_list)
+  println('usable gpu count is ' + gpu_list.size())
+
+  return gpu_list
+}
+
+
 pipeline {
   agent {
     node {
@@ -51,6 +113,7 @@ pipeline {
   environment {
     dateTime = 'NAtime'
     gpu_arg = " --env NVIDIA_VISIBLE_DEVICES=all --env NVIDIA_DRIVER_CAPABILITIES=all --gpus "
+    str_docker_opt_gpu = ""
   }
   stages {
     stage('Preparation') {
@@ -116,21 +179,55 @@ pipeline {
       }
     }
 
+   stage('CheckUsableGPU'){
+      steps {
+        echo 'Starting Check GPU...'
+        timeout(time: 24, unit: 'HOURS') {
+          waitUntil(initialRecurrencePeriod: 15000) {
+            script {
+              println('check usable gpu resource is ' + need_gpu_count)
+              usable_gpu_list = getUsableGPU()
+              if (usable_gpu_list.size() >= need_gpu_count.toInteger()){
+                println('Obtained GPU resource!')
+                str_docker_opt_gpu = "device="
+                for(i in 0 .. (need_gpu_count.toInteger() - 1)){
+                  if (i == 0){
+                    str_docker_opt_gpu = str_docker_opt_gpu + usable_gpu_list.get(i).toString()
+                  }else{
+                    str_docker_opt_gpu = str_docker_opt_gpu + ',' + usable_gpu_list.get(i).toString()
+                  }
+                }
+                str_docker_opt_gpu = '"' + str_docker_opt_gpu + '"'
+                str_docker_opt_gpu = "'" + str_docker_opt_gpu + "'"
+                println(str_docker_opt_gpu)
+                return true
+              }else{
+                println('There is not enough GPU resource.')
+                return false
+              }
+            }
+          }
+        }
+      }
+    }
+
     stage('DockerDeploy') {
       steps {
         echo 'Starting Docker Deploy...'
         script {
-          if (gpu_number == "None") {
-            gpu_arg=" "
-            gpu_number=" "
-          } else if (gpu_number != "All") {
-            gpu_arg+="\'\"device="
-            gpu_number+="\"\'"
-          }
-          println("gpu_arg = " + gpu_arg)
-          println("gpu_number = " + gpu_number)
-        }
-        sh 'docker run --rm '+ gpu_arg + gpu_number + docker_run_args +
+        //   if (gpu_number == "None") {
+        //     gpu_arg=" "
+        //     gpu_number=" "
+        //   } else if (gpu_number != "All") {
+        //     gpu_arg+="\'\"device="
+        //     gpu_number+="\"\'"
+        //   }
+        //   println("gpu_arg = " + gpu_arg)
+        //   println("gpu_number = " + gpu_number)
+        // }
+        // echo 'str_docker_opt_gpu='+str_docker_opt_gpu
+        // sh 'docker run --rm '+ gpu_arg + gpu_number + docker_run_args +
+        sh 'docker run --rm '+ gpu_arg + str_docker_opt_gpu + docker_run_args +
         ' -v ${PWD}/'+working_path+':/workspaces --workdir=/workspaces --name=container_'+dateTime +
         ' image_'+dateTime + ' /bin/bash'
 
@@ -197,7 +294,6 @@ pipeline {
     --volume=/mnt/Vision_AI_NAS:/mnt/Vision_AI_NAS \
     --volume=/mnt/Motional_Database:/mnt/Motional_Database \
     --net=host \
-    --privileged \
     --env DISPLAY=$DISPLAY \
     --env="QT_X11_NO_MITSHM=1" \
     --cap-add=SYS_PTRACE \
@@ -205,7 +301,11 @@ pipeline {
     --volume=/tmp/.X11-unix:/tmp/.X11-unix:rw \
     --group-add=plugdev \
     --group-add=video ''')
-    choice(name: 'gpu_number', choices: ['All', 'None', '0', '1', '2', '3', '4', '5', '6', '7'], description: 'GPU number to be utilized')
+    // --privileged \
+
+    choice(name: 'selected_server', choices:['T640', 'DGX-A100'], description: 'select GPU server, T640(RTX3090 x 4), DGX-A100(A100 x 8)')
+    choice(name: 'need_gpu_count', choices: [1, 2, 3, 4, 5, 6, 7, 8], description: 'GPU counts to be utilized')
+    // choice(name: 'gpu_number', choices: ['All', 'None', '0', '1', '2', '3', '4', '5', '6', '7'], description: 'GPU number to be utilized')
     string(name: 'credential_id', defaultValue: 'junhouk.mun', description: 'Registered ID for cloning git repositories')
   }
 }
