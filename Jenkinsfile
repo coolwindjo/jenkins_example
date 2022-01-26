@@ -40,29 +40,88 @@ def applyCommit(String commitCommand, int isBase) {
     }
 }
 
+def getContainerGPUIndex(int index, String containerName){
+  // script_str = "echo \$(docker inspect --format='{{(index .HostConfig.DeviceRequests 0).DeviceIDs}}' "+containerName+" | cut -c " + index.toString() + ")"
+  script_str = "echo \$(docker inspect --format='{{(index .HostConfig.DeviceRequests 0).DeviceIDs}}' "+containerName+" | cut -c 2)"
+  println(script_str)
+  get_gpu_number = sh(returnStdout: true, script: script_str).trim().toInteger()
+  return get_gpu_number
+}
 
-def getDevice(String containerName){
+def getDevice(String containerName, String serverName){
   println('getGPUDevice containerName is ' + containerName)
   script_str = "echo \$(docker inspect --format='{{(.HostConfig.DeviceRequests)}}' "+containerName+" | wc -w)"
   device_str_count = sh(returnStdout: true, script: script_str).trim().toInteger()
   // print('device str count is ' + device_str_count)
 
   def use_gpu = []
+  max_gpu_count = 8
   if (device_str_count > 1){
-    script_str = "echo \$(docker inspect --format='{{(index .HostConfig.DeviceRequests 0).DeviceIDs}}' "+containerName+" | cut -c 2)"
-    start_gpu_number = sh(returnStdout: true, script: script_str).trim().toInteger()
-    script_str = "echo \$(docker inspect --format='{{(index .HostConfig.DeviceRequests 0).DeviceIDs}}' "+containerName+" | rev | cut -c 2)"
-    end_gpu_number = sh(returnStdout: true, script: script_str).trim().toInteger()
-    // println('start_gpu_number is ' + start_gpu_number)
-    // println('end_gpu_number is ' + end_gpu_number)
+    script_str = "echo \$(docker inspect --format='{{(.HostConfig.DeviceRequests)}}' "+containerName+" | cut -c 4)"
+    str_check_gpu_all = sh(returnStdout: true, script: script_str).trim()
+    if (str_check_gpu_all == '-'){
+      if(serverName == 'T640'){
+        use_gpu = [0,1,2,3]
+      }else if(serverName == 'DGX-A100'){
+        use_gpu = [0,1,2,3,4,5,6,7]
+      }
+      println('use gpu is ' + use_gpu)
+      return use_gpu
+    }
 
-    for (gpu_number in start_gpu_number .. end_gpu_number){
-      use_gpu.add(gpu_number)
+    script_str = "echo \$(docker inspect --format='{{(index .HostConfig.DeviceRequests 0).DeviceIDs}}' "+containerName+" | cut -c 2)"
+    gpu_number_0 = sh(returnStdout: true, script: script_str).trim()
+    script_str = "echo \$(docker inspect --format='{{(index .HostConfig.DeviceRequests 0).DeviceIDs}}' "+containerName+" | cut -c 4)"
+    gpu_number_1 = sh(returnStdout: true, script: script_str).trim()
+    script_str = "echo \$(docker inspect --format='{{(index .HostConfig.DeviceRequests 0).DeviceIDs}}' "+containerName+" | cut -c 6)"
+    gpu_number_2 = sh(returnStdout: true, script: script_str).trim()
+    script_str = "echo \$(docker inspect --format='{{(index .HostConfig.DeviceRequests 0).DeviceIDs}}' "+containerName+" | cut -c 8)"
+    gpu_number_3 = sh(returnStdout: true, script: script_str).trim()
+    script_str = "echo \$(docker inspect --format='{{(index .HostConfig.DeviceRequests 0).DeviceIDs}}' "+containerName+" | cut -c 10)"
+    gpu_number_4 = sh(returnStdout: true, script: script_str).trim()
+    script_str = "echo \$(docker inspect --format='{{(index .HostConfig.DeviceRequests 0).DeviceIDs}}' "+containerName+" | cut -c 12)"
+    gpu_number_5 = sh(returnStdout: true, script: script_str).trim()
+    script_str = "echo \$(docker inspect --format='{{(index .HostConfig.DeviceRequests 0).DeviceIDs}}' "+containerName+" | cut -c 14)"
+    gpu_number_6 = sh(returnStdout: true, script: script_str).trim()
+    script_str = "echo \$(docker inspect --format='{{(index .HostConfig.DeviceRequests 0).DeviceIDs}}' "+containerName+" | cut -c 16)"
+    gpu_number_7 = sh(returnStdout: true, script: script_str).trim()
+    if(gpu_number_0 != "")
+    {
+      use_gpu.add(gpu_number_0.toInteger())
+    }
+    if(gpu_number_1 != "")
+    {
+      use_gpu.add(gpu_number_1.toInteger())
+    }
+    if(gpu_number_2 != "")
+    {
+      use_gpu.add(gpu_number_2.toInteger())
+    }
+    if(gpu_number_3 != "")
+    {
+      use_gpu.add(gpu_number_3.toInteger())
+    }
+    if(gpu_number_4 != "")
+    {
+      use_gpu.add(gpu_number_4.toInteger())
+    }
+    if(gpu_number_5 != "")
+    {
+      use_gpu.add(gpu_number_5.toInteger())
+    }
+    if(gpu_number_6 != "")
+    {
+      use_gpu.add(gpu_number_6.toInteger())
+    }
+    if(gpu_number_7 != "")
+    {
+      use_gpu.add(gpu_number_7.toInteger())
     }
   }else{
     println('this container not use gpu, container name is ' + containerName)
   }
 
+  println('use gpu is ' + use_gpu)
   return use_gpu
 }
 
@@ -72,14 +131,18 @@ def getContainerName(int containerNumber){
   return container_name
 }
 
-def getUsableGPU(){
-  gpu_list = [0,1,2,3] //T640
+def getUsableGPU(String serverName){
+  if(serverName == 'T640'){
+    gpu_list = [0,1,2,3]
+  }else if(serverName == 'DGX-A100'){
+    gpu_list = [0,1,2,3,4,5,6,7]
+  }
   str_container_count = sh(returnStdout: true, script: "echo \$(docker container ls -q | wc -l)")
   container_count = str_container_count.toInteger()
   println('container count is ' + container_count)
   while (container_count > 0){
     container_name = getContainerName(container_count)
-    device_list = getDevice(container_name)
+    device_list = getDevice(container_name, serverName)
     println(device_list)
     device_list.each{
       // print('remove device is ' + it)
@@ -101,19 +164,18 @@ def getUsableGPU(){
   return gpu_list
 }
 
-
 pipeline {
   agent {
     node {
       label 'master'
       customWorkspace 'workspace/master'
     }
-
   }
   environment {
     dateTime = 'NAtime'
     gpu_arg = " --env NVIDIA_VISIBLE_DEVICES=all --env NVIDIA_DRIVER_CAPABILITIES=all --gpus "
     str_docker_opt_gpu = ""
+    str_v_data = ""
   }
   stages {
     stage('Preparation') {
@@ -167,8 +229,15 @@ pipeline {
           int idDF = dockerfile_path.indexOf('Dockerfile')
           dockerfile_dir = dockerfile_path.substring(0,idDF)
         }
+
         dir(path: git_name) {
+          // str_git_name = echo "RUN git config --global user.name 'junhouk.mun'" >> Dockerfile
+          // str_git_email = echo "RUN git config --global user.email 'junhouk.mun@lge.com'" >> Dockerfile
           dir(path: dockerfile_dir){
+            println('current pwd is ' + pwd)
+            sh 'echo "RUN git config --global user.name ' + "\'" + credential_id + '\'" >> Dockerfile'
+            sh 'echo "RUN git config --global user.email ' + "\'" + credential_id + '@lge.com\'" >> Dockerfile'
+            sh 'cp -rf ~/.ssh .'
             sh 'docker build -t image_'+dateTime+ ' .'
           }
         }
@@ -179,14 +248,14 @@ pipeline {
       }
     }
 
-   stage('CheckUsableGPU'){
+    stage('CheckUsableGPU'){
       steps {
         echo 'Starting Check GPU...'
         timeout(time: 24, unit: 'HOURS') {
           waitUntil(initialRecurrencePeriod: 15000) {
             script {
               println('check usable gpu resource is ' + need_gpu_count)
-              usable_gpu_list = getUsableGPU()
+              usable_gpu_list = getUsableGPU(selected_server)
               if (usable_gpu_list.size() >= need_gpu_count.toInteger()){
                 println('Obtained GPU resource!')
                 str_docker_opt_gpu = "device="
@@ -214,20 +283,15 @@ pipeline {
     stage('DockerDeploy') {
       steps {
         echo 'Starting Docker Deploy...'
-        script {
-        //   if (gpu_number == "None") {
-        //     gpu_arg=" "
-        //     gpu_number=" "
-        //   } else if (gpu_number != "All") {
-        //     gpu_arg+="\'\"device="
-        //     gpu_number+="\"\'"
-        //   }
-        //   println("gpu_arg = " + gpu_arg)
-        //   println("gpu_number = " + gpu_number)
-        // }
-        // echo 'str_docker_opt_gpu='+str_docker_opt_gpu
-        // sh 'docker run --rm '+ gpu_arg + gpu_number + docker_run_args +
-        sh 'docker run --rm '+ gpu_arg + str_docker_opt_gpu + docker_run_args +
+        script{
+          if(selected_server == 'T640'){
+            str_v_data = ' -v /data:/data'
+          }else if(selected_server == 'DGX-A100'){
+            str_v_data = ' -v /raid/data:/data'
+          }
+        }
+
+        sh 'docker run --rm '+ gpu_arg + str_docker_opt_gpu + str_v_data + docker_run_args +
         ' -v ${PWD}/'+working_path+':/workspaces --workdir=/workspaces --name=container_'+dateTime +
         ' image_'+dateTime + ' /bin/bash'
 
@@ -290,7 +354,7 @@ pipeline {
     string(name: 'working_path', defaultValue: 'oms/cvlib/tools/CDPP/cics/tools/debug_gui/', description: 'Relative path to a working directory')
     choice(name: 'reuse_nexttime', choices: ['No', 'Yes'], description: 'If you want to use the built container image next time, choose Yes')
     string(name: 'docker_run_args', defaultValue: ''' -i -d \
-    --shm-size=64G -v /raid/data:/data  -p 7000:22 \
+    --shm-size=64G -p 7000:22 \
     --volume=/mnt/Vision_AI_NAS:/mnt/Vision_AI_NAS \
     --volume=/mnt/Motional_Database:/mnt/Motional_Database \
     --net=host \
@@ -302,10 +366,9 @@ pipeline {
     --group-add=plugdev \
     --group-add=video ''')
     // --privileged \
-
-    choice(name: 'selected_server', choices:['T640', 'DGX-A100'], description: 'select GPU server, T640(RTX3090 x 4), DGX-A100(A100 x 8)')
+    choice(name: 'selected_server', choices:['DGX-A100', 'T640'], description: 'select GPU server, T640(RTX3090 x 4), DGX-A100(A100 x 8)')
     choice(name: 'need_gpu_count', choices: [1, 2, 3, 4, 5, 6, 7, 8], description: 'GPU counts to be utilized')
     // choice(name: 'gpu_number', choices: ['All', 'None', '0', '1', '2', '3', '4', '5', '6', '7'], description: 'GPU number to be utilized')
-    string(name: 'credential_id', defaultValue: 'junhouk.mun', description: 'Registered ID for cloning git repositories')
+    string(name: 'credential_id', defaultValue: 'junhouk.mun', description: 'Registered ID for cloning git repositories (AD ID)')
   }
 }
